@@ -1,16 +1,28 @@
-import { MessageSquare, Bot, Zap, MessageSquarePlus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { MessageSquare, MessageSquarePlus, Search, Trash2, X } from "lucide-react";
 import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
-  SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
 import { Button } from "./ui/button";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getSevenDaysChats, getTodaysChats, getYesterdaysChats, deleteChat } from "@/lib/api";
+import { deleteChat, getHealth, getSevenDaysChats, getTodaysChats, getYesterdaysChats } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
-interface IChat { id: string; title: string; created_at?: string; }
+interface IChat {
+  id: string;
+  title: string;
+  created_at?: string;
+}
 
 function cleanTitle(t?: string) {
   if (!t) return "New conversation";
@@ -25,14 +37,25 @@ export function AppSidebar() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { chat_uid } = useParams();
+  const [search, setSearch] = useState("");
 
-  const { data: toDaysData } = useQuery({ queryKey: ["todaysChat"], queryFn: getTodaysChats });
-  const { data: yesterdaysData } = useQuery({ queryKey: ["yesterdaysChat"], queryFn: getYesterdaysChats });
-  const { data: sevenDaysData } = useQuery({ queryKey: ["sevenDaysChat"], queryFn: getSevenDaysChats });
+  const { user } = useAuth();
+  const { data: toDaysData } = useQuery({ queryKey: ["todaysChat"], queryFn: getTodaysChats, enabled: !!user });
+  const { data: yesterdaysData } = useQuery({ queryKey: ["yesterdaysChat"], queryFn: getYesterdaysChats, enabled: !!user });
+  const { data: sevenDaysData } = useQuery({ queryKey: ["sevenDaysChat"], queryFn: getSevenDaysChats, enabled: !!user });
+  const { data: health } = useQuery({
+    queryKey: ["health"],
+    queryFn: getHealth,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
-  const recentChats: IChat[] = Array.isArray(toDaysData) ? toDaysData : [];
-  const yesterdaysChats: IChat[] = Array.isArray(yesterdaysData) ? yesterdaysData : [];
-  const sevenDaysChats: IChat[] = Array.isArray(sevenDaysData) ? sevenDaysData : [];
+  const q = search.trim().toLowerCase();
+  const match = (c: IChat) => !q || (c.title || "").toLowerCase().includes(q);
+  const recentChats: IChat[] = (Array.isArray(toDaysData) ? toDaysData : []).filter(match);
+  const yesterdaysChats: IChat[] = (Array.isArray(yesterdaysData) ? yesterdaysData : []).filter(match);
+  const sevenDaysChats: IChat[] = (Array.isArray(sevenDaysData) ? sevenDaysData : []).filter(match);
+  const totalChats = recentChats.length + yesterdaysChats.length + sevenDaysChats.length;
 
   const del = useMutation({
     mutationFn: deleteChat,
@@ -48,19 +71,26 @@ export function AppSidebar() {
     <SidebarMenu>
       {chats.map((chat) => (
         <SidebarMenuItem key={chat.id}>
-          <div className="group flex items-center gap-1">
-            <NavLink to={`/chats/${chat.id}`} className="min-w-0 flex-1">
+          <div className="group/item flex items-center gap-1">
+            <NavLink to={`/chats/${chat.id}`} className="min-w-0 flex-1" title={cleanTitle(chat.title)}>
               {({ isActive }) => (
-                <SidebarMenuButton className={cn("flex items-center gap-3 px-4 py-2 rounded-md transition cursor-pointer", isActive ? "bg-muted" : "hover:bg-muted")}>
-                  <MessageSquare className="w-4 h-4 shrink-0 text-muted-foreground" />
-                  <span className="text-sm truncate">{cleanTitle(chat.title)}</span>
+                <SidebarMenuButton
+                  className={cn(
+                    "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition",
+                    isActive ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"
+                  )}
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-sm">{cleanTitle(chat.title)}</span>
                 </SidebarMenuButton>
               )}
             </NavLink>
             <button
               aria-label="Delete chat"
-              onClick={() => { if (confirm("Delete this chat?")) del.mutate(chat.id); }}
-              className="mr-1 hidden rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:block"
+              onClick={() => {
+                if (confirm("Delete this chat?")) del.mutate(chat.id);
+              }}
+              className="mr-1 hidden rounded p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive group-hover/item:block"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -70,64 +100,80 @@ export function AppSidebar() {
     </SidebarMenu>
   );
 
+  const group = (label: string, chats: IChat[]) =>
+    chats.length > 0 && (
+      <SidebarGroup className="mt-3 px-0">
+        <SidebarGroupLabel className="px-4 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
+          {label}
+        </SidebarGroupLabel>
+        <SidebarGroupContent>{renderList(chats)}</SidebarGroupContent>
+      </SidebarGroup>
+    );
+
   return (
-    <Sidebar className="bg-background text-foreground border-r">
-      <SidebarContent className="flex flex-col justify-between h-full">
-        <div>
-          <div className="px-4 pt-4">
-            <Button variant="secondary" className="w-full justify-start cursor-pointer gap-2" asChild>
-              <Link to="/chats/new">
-                <MessageSquarePlus className="w-4 h-4" /> New Chat
-              </Link>
-            </Button>
+    <Sidebar className="border-r bg-sidebar text-sidebar-foreground">
+      <SidebarContent className="flex flex-col">
+        {/* New chat + search */}
+        <div className="space-y-2.5 px-3 pt-3">
+          <Button
+            asChild
+            className="bg-brand-gradient w-full justify-start gap-2 text-white shadow-md transition hover:brightness-110"
+          >
+            <Link to="/chats/new">
+              <MessageSquarePlus className="h-4 w-4" /> New Chat
+            </Link>
+          </Button>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search chats…"
+              aria-label="Search chats"
+              className="h-9 bg-muted/50 pl-8 pr-8 text-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-
-          {recentChats.length > 0 && (
-            <SidebarGroup className="mt-4">
-              <SidebarGroupLabel className="text-xs text-muted-foreground uppercase px-4 pb-2">Today</SidebarGroupLabel>
-              <SidebarGroupContent>{renderList(recentChats)}</SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {yesterdaysChats.length > 0 && (
-            <SidebarGroup className="mt-4">
-              <SidebarGroupLabel className="text-xs text-muted-foreground uppercase px-4 pb-2">Yesterday</SidebarGroupLabel>
-              <SidebarGroupContent>{renderList(yesterdaysChats)}</SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {sevenDaysChats.length > 0 && (
-            <SidebarGroup className="mt-4">
-              <SidebarGroupLabel className="text-xs text-muted-foreground uppercase px-4 pb-2">Last 7 Days</SidebarGroupLabel>
-              <SidebarGroupContent>{renderList(sevenDaysChats)}</SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {recentChats.length === 0 && yesterdaysChats.length === 0 && sevenDaysChats.length === 0 && (
-            <p className="px-4 pt-6 text-sm text-muted-foreground">No conversations yet. Start a new chat.</p>
-          )}
-
-          <SidebarGroup className="mt-6">
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link to="#" className="flex items-center gap-3 px-4 py-2 hover:bg-muted rounded-md transition">
-                    <Bot className="w-5 h-5 text-muted-foreground" />
-                    <span className="text-sm font-semibold">Explore GPTs</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
         </div>
 
-        <div className="p-4 border-t">
-          <Link to="#" className="flex items-center justify-between bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <Zap className="w-4 h-4" /> Upgrade to Pro
+        {/* History */}
+        <div className="mt-1 min-h-0 flex-1 overflow-y-auto">
+          {group("Today", recentChats)}
+          {group("Yesterday", yesterdaysChats)}
+          {group("Last 7 Days", sevenDaysChats)}
+
+          {totalChats === 0 && (
+            <div className="mt-10 flex flex-col items-center px-6 text-center text-muted-foreground">
+              <MessageSquare className="mb-3 h-8 w-8 opacity-40" />
+              <p className="text-sm">{q ? "No chats match your search." : "No conversations yet."}</p>
+              {!q && <p className="mt-1 text-xs">Start a new chat and it will show up here.</p>}
+            </div>
+          )}
+        </div>
+
+        {/* AI status */}
+        <div className="border-t p-3">
+          <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
+            <span
+              className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                health?.ai_configured ? "animate-pulse bg-emerald-500" : "bg-amber-500"
+              )}
+            />
+            <span className="truncate text-xs font-medium">
+              {health?.ai_configured ? health.model || "AI ready" : "Demo mode"}
             </span>
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">New</Badge>
-          </Link>
+            <span className="bg-brand-gradient ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-black leading-none text-white">W</span>
+          </div>
         </div>
       </SidebarContent>
     </Sidebar>

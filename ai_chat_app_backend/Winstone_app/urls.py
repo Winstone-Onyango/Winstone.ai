@@ -9,6 +9,7 @@ urlpatterns = [
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/me/", views.me, name="me"),
     path("prompt_gpt/", views.prompt_gpt, name="prompt_gpt"),
+    path("stream_gpt/", views.stream_gpt, name="stream_gpt"),
     path("get_chat_messages/<str:pk>/", views.get_chat_messages, name="get_chat_messages"),
     path("delete_chat/<str:pk>/", views.delete_chat, name="delete_chat"),
     path("todays_chat/", views.todays_chat, name="todays_chat"),

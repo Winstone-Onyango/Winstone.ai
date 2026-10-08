@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
-import { LogIn, UserPlus, Loader2, X } from "lucide-react";
+import { Loader2, LogIn, UserPlus, X } from "lucide-react";
 
 interface Props {
   mode: "signin" | "signup";
@@ -51,11 +51,14 @@ export default function AuthModal({ mode, onClose, onSwitch }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border bg-background p-6 shadow-2xl"
+        className="animate-pop-in w-full max-w-md rounded-2xl border bg-background p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
           <div>
+            <div className="bg-brand-gradient mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-md">
+              <span className="text-lg font-black leading-none">W</span>
+            </div>
             <h2 className="text-2xl font-bold tracking-tight">
               {isSignup ? "Create your account" : "Welcome back"}
             </h2>

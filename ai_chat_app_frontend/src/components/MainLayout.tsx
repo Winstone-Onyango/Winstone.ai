@@ -1,18 +1,18 @@
-import { Outlet } from "react-router-dom"
-import { AppSidebar } from "./AppSidebar"
-import { SidebarProvider} from "./ui/sidebar"
-import Navbar from "./Navbar"
+import { Outlet } from "react-router-dom";
+import { AppSidebar } from "./AppSidebar";
+import { SidebarProvider } from "./ui/sidebar";
+import Navbar from "./Navbar";
 
 const MainLayout = () => {
   return (
-     <SidebarProvider>
+    <SidebarProvider>
       <AppSidebar />
-      <main className="w-full h-screen flex flex-col">
+      <main className="flex h-dvh w-full min-w-0 flex-col">
         <Navbar />
-        {<Outlet />}
+        <Outlet />
       </main>
     </SidebarProvider>
-  )
-}
+  );
+};
 
-export default MainLayout
+export default MainLayout;
