@@ -5,6 +5,11 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+try:
+    import google.generativeai as genai
+except ImportError:  # pragma: no cover - fallback if gemini sdk not installed
+    genai = None
+
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -29,14 +34,17 @@ def _ai_model() -> str:
     return getattr(settings, "AI_MODEL", None) or "default"
 
 
-def _get_openai_client():
-    api_key = getattr(settings, "AI_API_KEY", "") or ""
+def _get_gemini_client():
+    api_key = getattr(settings, "GEMINI_API_KEY", "") or ""
     if not api_key:
         return None
     try:
-        from openai import OpenAI
-        base_url = getattr(settings, "AI_BASE_URL", "") or None
-        return OpenAI(api_key=api_key, base_url=base_url)
+        genai.configure(api_key=api_key)
+        model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+        system_instruction = "You are Winstone.ai, a friendly and helpful assistant."
+        return genai.GenerativeModel(
+            model_name=model_name, system_instruction=system_instruction
+        )
     except Exception:
         return None
 
@@ -64,58 +72,72 @@ def _demo_title(user_message: str) -> str:
 
 
 def createChatTitle(user_message):
-    client = _get_openai_client()
-    if client is None:
+    if genai is None:
         return _demo_title(user_message)
     try:
-        response = client.chat.completions.create(
-            model=_ai_model(),
-            messages=[
-                {"role": "system", "content": "Give a short, descriptive title for this conversation in not more than 5 words. Return ONLY the title."},
-                {"role": "user", "content": user_message},
-            ],
+        title_model = genai.GenerativeModel(
+            model_name=getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash"),
+            system_instruction=(
+                "Give a short, descriptive title for this conversation "
+                "in not more than 5 words. Return ONLY the title."
+            ),
         )
-        title = (response.choices[0].message.content or "").strip().strip(chr(34)).strip(chr(39))
+        response = title_model.generate_content(user_message)
+        title = (response.text or "").strip()
         return title or _demo_title(user_message)
     except Exception:
         return _demo_title(user_message)
 
 
 def _friendly_ai_error(exc) -> str:
-    """Turn a raw OpenAI/sdk exception into a message that is safe to show."""
+    """Turn a raw Gemini/OpenAI exception into a message that is safe to show."""
     text = str(exc or "").lower()
+    # Gemini is the current provider. The classic OpenAI error checks are kept
+    # as a fallback for any mixed or legacy deployment patterns.
+    if (
+        "unauthenticated" in text
+        or "invalid api key" in text
+        or "invalid key" in text
+        or "401" in text
+        or "permission" in text
+        or "incorrect" in text
+    ):
+        return (
+            "The server's Gemini API key looks invalid or revoked. "
+            "Update GEMINI_API_KEY in the backend .env file."
+        )
     if (
         "insufficient_quota" in text
         or "credit_balance_exhausted" in text
         or "no credits" in text
         or "out of credits" in text
-        or ("429" in text and "quota" in text)
     ):
         return (
             "My AI provider account is currently **out of credits**, so I can't generate a real reply yet. "
-            "Add credits at [platform.openai.com/settings/organization/billing](https://platform.openai.com/settings/organization/billing) "
+            "Add credits at [Google AI Studio](https://aistudio.google.com/apikey) "
             "and your next message will be answered normally.\n\n"
             "Your message above has been saved, so nothing is lost."
         )
-    if "429" in text or "rate" in text or "quota" in text or "billing" in text:
+    if (
+        "429" in text
+        or "rate" in text
+        or "quota" in text
+        or "billing" in text
+        or "resource has been exceeded" in text
+    ):
         return (
             "I'm hitting my rate limit right now — the AI quota looks exhausted. "
             "Please wait a moment and try again. Your message has been saved."
         )
-    if "401" in text or "api key" in text or "permission" in text or "incorrect" in text:
-        return (
-            "The server's Venice API key looks invalid or revoked. "
-            "Update VENICE_API_KEY in the backend .env file."
-        )
     if "timeout" in text or "timed out" in text or "connection" in text:
-        return "The AI service timed out reaching OpenAI. Check the server connection and try again."
-    return "Something went wrong while contacting the AI service. Please try again."
+        return "The AI service timed out reaching the AI provider. Check the server connection and try again."
+    return "Something went wrong while contacting the AI provider. Please try again."
 
 
 def _ask_gpt(openai_messages):
     """Return (text, state) where state is 'ok' | 'demo' | 'error'."""
-    client = _get_openai_client()
-    if client is None:
+    model = _get_gemini_client()
+    if model is None:
         last_user = ""
         for m in reversed(openai_messages):
             if m.get("role") == "user":
@@ -123,11 +145,15 @@ def _ask_gpt(openai_messages):
                 break
         return _demo_reply(last_user), "demo"
     try:
-        response = client.chat.completions.create(
-            model=_ai_model(),
-            messages=openai_messages,
-        )
-        text = (response.choices[0].message.content or "").strip()
+        # Gemini conversation history format: list of {role, parts} dicts.
+        # The system message is handled by the model's system_instruction.
+        contents = [
+            {"role": m["role"], "parts": [m["content"]]}
+            for m in openai_messages
+            if m.get("role") != "system"
+        ]
+        response = model.generate_content(contents)
+        text = (response.text or "").strip()
         if not text:
             return _friendly_ai_error(None), "error"
         return text, "ok"
@@ -195,12 +221,12 @@ def me(request):
 
 @api_view(["GET"])
 def health(request):
-    client = _get_openai_client()
+    model = _get_gemini_client()
     return Response({
         "ok": True,
-        "ai_configured": client is not None,
+        "ai_configured": model is not None,
 
-        "provider": getattr(settings, "AI_PROVIDER", "venice"),
+        "provider": getattr(settings, "AI_PROVIDER", "gemini"),
         "model": _ai_model(),
         "time": timezone.now().isoformat(),
     })
@@ -323,10 +349,16 @@ def stream_gpt(request):
 
     openai_messages = _build_openai_messages(chat)
     base_meta = {"title": chat.title, "chat_id": str(chat.id)}
-    client = _get_openai_client()
+    # Build Gemini-compatible conversation history (system message is handled
+    # by the model's system_instruction and is excluded here).
+    contents = [
+        {"role": m["role"], "parts": [m["content"]]}
+        for m in openai_messages
+        if m.get("role") != "system"
+    ]
 
     # ---- Demo mode: simulate a token stream so the UX stays identical ----
-    if client is None:
+    if genai is None:
         demo_reply = _demo_reply(content)
 
         def demo_stream():
@@ -342,21 +374,18 @@ def stream_gpt(request):
 
     # ---- Live OpenAI stream ----
     def ai_stream():
-        parts = []
+        accumulated = []
         try:
-            upstream = client.chat.completions.create(
-                model=_ai_model(),
-                messages=openai_messages,
-                stream=True,
+            model = genai.GenerativeModel(
+                model_name=getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash"),
+                system_instruction="You are Winstone.ai, a friendly and helpful assistant.",
             )
-            for event in upstream:
-                if not event.choices:
-                    continue
-                delta = event.choices[0].delta.content or ""
-                if delta:
-                    parts.append(delta)
-                    yield _sse({"delta": delta})
-            full_reply = "".join(parts).strip()
+            response = model.generate_content(contents, stream=True)
+            for chunk in response:
+                if chunk.text:
+                    accumulated.append(chunk.text)
+                    yield _sse({"delta": chunk.text})
+            full_reply = "".join(accumulated).strip()
             if not full_reply:
                 note = _friendly_ai_error(None)
                 try:
@@ -372,9 +401,9 @@ def stream_gpt(request):
             yield _sse({"done": True, "demo": False, **base_meta})
         except GeneratorExit:
             # Client went away (e.g. pressed Stop) — keep the partial text.
-            if parts:
+            if accumulated:
                 try:
-                    ChatMessage.objects.create(role="assistant", content="".join(parts), chat=chat)
+                    ChatMessage.objects.create(role="assistant", content="".join(accumulated), chat=chat)
                     chat.save(update_fields=["updated_at"])
                 except Exception:
                     pass
