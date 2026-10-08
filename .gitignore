@@ -1,0 +1,12 @@
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*
+.envrc
+
+# Virtual environments
+.venv/
+venv/
+**/.venv/
+**/venv/
