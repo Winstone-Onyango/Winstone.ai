@@ -26,9 +26,19 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
-# OpenAI — app runs in DEMO mode when missing (echo-style smart fallback)
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
+# Venice.ai — OpenAI-compatible endpoint (drop-in replacement for OpenAI).
+# App runs in DEMO mode when the key is missing (graceful echo-style fallback).
+AI_PROVIDER = os.environ.get('AI_PROVIDER', 'venice')
+AI_BASE_URL = (
+    os.environ.get('AI_BASE_URL') or 'https://api.venice.ai/api/v1'
+).rstrip('/')
+AI_API_KEY = (os.environ.get('VENICE_API_KEY') or '').strip()
+# Venice resolves the 'default' trait to its current default chat model.
+AI_MODEL = os.environ.get('AI_MODEL') or 'default'
+
+# Back-compat aliases (legacy names still referenced elsewhere/health payload).
+OPENAI_API_KEY = AI_API_KEY
+OPENAI_MODEL = AI_MODEL
 
 
 # Application definition

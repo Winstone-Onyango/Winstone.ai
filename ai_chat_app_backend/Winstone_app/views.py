@@ -1,8 +1,11 @@
-﻿import uuid
+import json
+import time
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -22,13 +25,18 @@ from Winstone_app.serializer import (
 User = get_user_model()
 
 
+def _ai_model() -> str:
+    return getattr(settings, "AI_MODEL", None) or "default"
+
+
 def _get_openai_client():
-    api_key = getattr(settings, "OPENAI_API_KEY", "") or ""
+    api_key = getattr(settings, "AI_API_KEY", "") or ""
     if not api_key:
         return None
     try:
         from openai import OpenAI
-        return OpenAI(api_key=api_key)
+        base_url = getattr(settings, "AI_BASE_URL", "") or None
+        return OpenAI(api_key=api_key, base_url=base_url)
     except Exception:
         return None
 
@@ -40,8 +48,8 @@ def _demo_reply(user_message: str) -> str:
     preview = text if len(text) <= 400 else text[:400] + "..."
     return (
         f"Thanks for sharing that! You said:\n\n> {preview}\n\n"
-        "I am running in **demo mode** right now (no `OPENAI_API_KEY` was found on the server), "
-        "so I cannot call GPT yet. Add your OpenAI key to the backend `.env` file to get full AI answers. "
+        "I am running in **demo mode** right now (no `VENICE_API_KEY` was found on the server), "
+        "so I cannot reach Venice.ai yet. Add your Venice API key to the backend `.env` file to get full AI answers. "
         "In the meantime — what else is on your mind?"
     )
 
@@ -61,7 +69,7 @@ def createChatTitle(user_message):
         return _demo_title(user_message)
     try:
         response = client.chat.completions.create(
-            model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+            model=_ai_model(),
             messages=[
                 {"role": "system", "content": "Give a short, descriptive title for this conversation in not more than 5 words. Return ONLY the title."},
                 {"role": "user", "content": user_message},
@@ -73,7 +81,39 @@ def createChatTitle(user_message):
         return _demo_title(user_message)
 
 
+def _friendly_ai_error(exc) -> str:
+    """Turn a raw OpenAI/sdk exception into a message that is safe to show."""
+    text = str(exc or "").lower()
+    if (
+        "insufficient_quota" in text
+        or "credit_balance_exhausted" in text
+        or "no credits" in text
+        or "out of credits" in text
+        or ("429" in text and "quota" in text)
+    ):
+        return (
+            "My AI provider account is currently **out of credits**, so I can't generate a real reply yet. "
+            "Add credits at [platform.openai.com/settings/organization/billing](https://platform.openai.com/settings/organization/billing) "
+            "and your next message will be answered normally.\n\n"
+            "Your message above has been saved, so nothing is lost."
+        )
+    if "429" in text or "rate" in text or "quota" in text or "billing" in text:
+        return (
+            "I'm hitting my rate limit right now — the AI quota looks exhausted. "
+            "Please wait a moment and try again. Your message has been saved."
+        )
+    if "401" in text or "api key" in text or "permission" in text or "incorrect" in text:
+        return (
+            "The server's Venice API key looks invalid or revoked. "
+            "Update VENICE_API_KEY in the backend .env file."
+        )
+    if "timeout" in text or "timed out" in text or "connection" in text:
+        return "The AI service timed out reaching OpenAI. Check the server connection and try again."
+    return "Something went wrong while contacting the AI service. Please try again."
+
+
 def _ask_gpt(openai_messages):
+    """Return (text, state) where state is 'ok' | 'demo' | 'error'."""
     client = _get_openai_client()
     if client is None:
         last_user = ""
@@ -81,26 +121,27 @@ def _ask_gpt(openai_messages):
             if m.get("role") == "user":
                 last_user = m.get("content", "")
                 break
-        return _demo_reply(last_user), True
+        return _demo_reply(last_user), "demo"
     try:
         response = client.chat.completions.create(
-            model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+            model=_ai_model(),
             messages=openai_messages,
         )
-        return (response.choices[0].message.content or "").strip(), False
+        text = (response.choices[0].message.content or "").strip()
+        if not text:
+            return _friendly_ai_error(None), "error"
+        return text, "ok"
     except Exception as e:
-        return f"An error from OpenAI: {str(e)}", False
+        return _friendly_ai_error(e), "error"
 
 
 def _scope_chats(request):
-    qs = Chat.objects.all()
+    # Signed-out users must never see any conversation history.
     user = getattr(request, "user", None)
-    if user is not None and getattr(user, "is_authenticated", False):
-        owned = qs.filter(user=user)
-        # Backwards compat: include legacy chats with no user as well
-        legacy = qs.filter(user__isnull=True)
-        return (owned | legacy).distinct()
-    return qs
+    if not (user and getattr(user, "is_authenticated", False)):
+        return Chat.objects.none()
+    # Signed-in users see ONLY chats owned by this account.
+    return Chat.objects.filter(user=user)
 
 
 def _tokens_for_user(user):
@@ -158,56 +199,203 @@ def health(request):
     return Response({
         "ok": True,
         "ai_configured": client is not None,
-        "model": getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+
+        "provider": getattr(settings, "AI_PROVIDER", "venice"),
+        "model": _ai_model(),
         "time": timezone.now().isoformat(),
     })
 
 
 # ---------------- Chat ----------------
 
+def _begin_chat(request, chat_id, content, regenerate=False):
+    """Validate the request, get-or-create the chat, and persist the user turn.
+
+    Returns (chat, error_response); error_response is None on success.
+    """
+    try:
+        chat_uuid = uuid.UUID(str(chat_id))
+    except (ValueError, AttributeError, TypeError):
+        return None, Response({"error": "Invalid chat ID format."}, status=400)
+
+    user = request.user if getattr(request.user, "is_authenticated", False) else None
+    chat, _created = Chat.objects.get_or_create(id=chat_uuid, defaults={"user": user})
+    if user is not None and chat.user is None:
+        chat.user = user
+
+    # Only generate the title for the very first turn (keep history stable)
+    if chat.messages.count() == 0:
+        chat.title = createChatTitle(content)
+        chat.save()
+
+    if regenerate:
+        # Remove the previous assistant reply (if any) and reuse the stored user
+        # turn when it matches, so retries never duplicate messages.
+        last_msg = chat.messages.order_by("-created_at").first()
+        if last_msg is not None and last_msg.role == "assistant":
+            last_msg.delete()
+        last_user = chat.messages.filter(role="user").order_by("-created_at").first()
+        if last_user is None or last_user.content != content:
+            ChatMessage.objects.create(role="user", chat=chat, content=content)
+    else:
+        ChatMessage.objects.create(role="user", chat=chat, content=content)
+    return chat, None
+
+
+def _build_openai_messages(chat):
+    chat_messages = chat.messages.order_by("created_at")[:20]
+    openai_messages = [
+        {"role": m.role if m.role in ("user", "assistant", "system") else "user", "content": m.content}
+        for m in chat_messages
+    ]
+    if not any(m["role"] in ("assistant", "system") for m in openai_messages):
+        openai_messages.insert(0, {"role": "system", "content": "You are Winstone.ai, a friendly and helpful assistant."})
+    return openai_messages
+
+
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def prompt_gpt(request):
     chat_id = request.data.get("chat_id")
     content = (request.data.get("content") or "").strip()
+    regenerate = bool(request.data.get("regenerate"))
 
     if not chat_id:
         return Response({"error": "Chat ID was not provided."}, status=400)
     if not content:
         return Response({"error": "There was no prompt passed."}, status=400)
 
-    try:
-        chat_uuid = uuid.UUID(str(chat_id))
-    except (ValueError, AttributeError, TypeError):
-        return Response({"error": "Invalid chat ID format."}, status=400)
+    chat, err = _begin_chat(request, chat_id, content, regenerate)
+    if err is not None:
+        return err
 
-    user = request.user if getattr(request.user, "is_authenticated", False) else None
-    chat, created = Chat.objects.get_or_create(id=chat_uuid, defaults={"user": user})
-    if user is not None and chat.user is None:
-        chat.user = user
-    # Only generate/change title for the first user message (keep history stable)
-    first_message = chat.messages.count() == 0
-    if first_message:
-        chat.title = createChatTitle(content)
-    chat.save()
+    openai_messages = _build_openai_messages(chat)
+    openai_reply, state = _ask_gpt(openai_messages)
 
-    ChatMessage.objects.create(role="user", chat=chat, content=content)
-
-    chat_messages = chat.messages.order_by("created_at")[:20]
-    openai_messages = [{"role": m.role if m.role in ("user", "assistant", "system") else "user", "content": m.content} for m in chat_messages]
-    if not any(m["role"] in ("assistant", "system") for m in openai_messages):
-        openai_messages.insert(0, {"role": "system", "content": "You are Winstone.ai, a friendly and helpful assistant."})
-
-    openai_reply, is_demo = _ask_gpt(openai_messages)
-    if not openai_reply:
-        openai_reply = _demo_reply(content)
-        is_demo = True
+    if state == "error":
+        # Persist the graceful note so the assistant turn survives reloads.
+        ChatMessage.objects.create(role="assistant", content=openai_reply, chat=chat)
+        chat.save(update_fields=["updated_at"])
+        return Response({
+            "reply": openai_reply,
+            "error": True,
+            "demo": False,
+            "title": chat.title,
+            "chat_id": str(chat.id),
+        }, status=status.HTTP_200_OK)
 
     ChatMessage.objects.create(role="assistant", content=openai_reply, chat=chat)
     chat.save(update_fields=["updated_at"])
-    return Response({"reply": openai_reply, "demo": is_demo, "title": chat.title, "chat_id": str(chat.id)}, status=status.HTTP_201_CREATED)
+    return Response({
+        "reply": openai_reply,
+        "error": False,
+        "demo": state == "demo",
+        "title": chat.title,
+        "chat_id": str(chat.id),
+    }, status=status.HTTP_201_CREATED)
+
+
+def _sse(payload: dict) -> str:
+    return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stream_gpt(request):
+    """Server-sent-events variant of prompt_gpt: yields `data: {...}` chunks.
+
+    Events: {"delta": "..."}* followed by one of:
+      {"done": true, "title": ..., "chat_id": ..., "demo": bool}
+      {"error": "friendly message", "done": true, ...}
+    """
+    chat_id = request.data.get("chat_id")
+    content = (request.data.get("content") or "").strip()
+    regenerate = bool(request.data.get("regenerate"))
+
+    if not chat_id:
+        return Response({"error": "Chat ID was not provided."}, status=400)
+    if not content:
+        return Response({"error": "There was no prompt passed."}, status=400)
+
+    chat, err = _begin_chat(request, chat_id, content, regenerate)
+    if err is not None:
+        return err
+
+    openai_messages = _build_openai_messages(chat)
+    base_meta = {"title": chat.title, "chat_id": str(chat.id)}
+    client = _get_openai_client()
+
+    # ---- Demo mode: simulate a token stream so the UX stays identical ----
+    if client is None:
+        demo_reply = _demo_reply(content)
+
+        def demo_stream():
+            ChatMessage.objects.create(role="assistant", content=demo_reply, chat=chat)
+            chat.save(update_fields=["updated_at"])
+            step = 8
+            for i in range(0, len(demo_reply), step):
+                yield _sse({"delta": demo_reply[i:i + step]})
+                time.sleep(0.012)
+            yield _sse({"done": True, "demo": True, **base_meta})
+
+        return StreamingHttpResponse(demo_stream(), content_type="text/event-stream")
+
+    # ---- Live OpenAI stream ----
+    def ai_stream():
+        parts = []
+        try:
+            upstream = client.chat.completions.create(
+                model=_ai_model(),
+                messages=openai_messages,
+                stream=True,
+            )
+            for event in upstream:
+                if not event.choices:
+                    continue
+                delta = event.choices[0].delta.content or ""
+                if delta:
+                    parts.append(delta)
+                    yield _sse({"delta": delta})
+            full_reply = "".join(parts).strip()
+            if not full_reply:
+                note = _friendly_ai_error(None)
+                try:
+                    ChatMessage.objects.create(role="assistant", content=note, chat=chat)
+                    chat.save(update_fields=["updated_at"])
+                except Exception:
+                    pass
+                yield _sse({"delta": note})
+                yield _sse({"done": True, "demo": False, **base_meta})
+                return
+            ChatMessage.objects.create(role="assistant", content=full_reply, chat=chat)
+            chat.save(update_fields=["updated_at"])
+            yield _sse({"done": True, "demo": False, **base_meta})
+        except GeneratorExit:
+            # Client went away (e.g. pressed Stop) — keep the partial text.
+            if parts:
+                try:
+                    ChatMessage.objects.create(role="assistant", content="".join(parts), chat=chat)
+                    chat.save(update_fields=["updated_at"])
+                except Exception:
+                    pass
+            raise
+        except Exception as e:
+            # Persist a graceful note so the assistant turn survives reloads
+            # instead of silently vanishing from the history.
+            note = _friendly_ai_error(e)
+            try:
+                ChatMessage.objects.create(role="assistant", content=note, chat=chat)
+                chat.save(update_fields=["updated_at"])
+            except Exception:
+                pass
+            yield _sse({"delta": note})
+            yield _sse({"done": True, "demo": False, **base_meta})
+
+    return StreamingHttpResponse(ai_stream(), content_type="text/event-stream")
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_chat_messages(request, pk):
     try:
         chat_uuid = uuid.UUID(str(pk))
@@ -220,6 +408,7 @@ def get_chat_messages(request, pk):
 
 
 @api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
 def delete_chat(request, pk):
     try:
         chat_uuid = uuid.UUID(str(pk))
@@ -231,6 +420,7 @@ def delete_chat(request, pk):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def todays_chat(request):
     today = timezone.localdate()
     chats = _scope_chats(request).filter(created_at__date=today).order_by("-created_at")[:20]
@@ -239,6 +429,7 @@ def todays_chat(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def yesterdays_chat(request):
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)
@@ -248,6 +439,7 @@ def yesterdays_chat(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def seven_days_chat(request):
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)

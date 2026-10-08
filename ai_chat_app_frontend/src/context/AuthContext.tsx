@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { fetchMe, login as apiLogin, register as apiRegister } from "@/lib/api";
 import type { AuthUser } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem("access_token");
@@ -70,8 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("auth_user");
+    queryClient.clear();
     setUser(null);
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo(
     () => ({ user, loading, signIn, signUp, signOut, refreshUser }),
