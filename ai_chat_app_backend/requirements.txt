@@ -21,3 +21,5 @@ truststore==0.10.4
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2026.5
+google-generativeai==0.8.6
+psycopg2-binary==2.9.13

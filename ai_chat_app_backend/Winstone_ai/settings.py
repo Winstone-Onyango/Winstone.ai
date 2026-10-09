@@ -26,15 +26,14 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
-# Venice.ai — OpenAI-compatible endpoint (drop-in replacement for OpenAI).
-# App runs in DEMO mode when the key is missing (graceful echo-style fallback).
-AI_PROVIDER = os.environ.get('AI_PROVIDER', 'venice')
-AI_BASE_URL = (
-    os.environ.get('AI_BASE_URL') or 'https://api.venice.ai/api/v1'
-).rstrip('/')
+# AI provider settings. App runs in DEMO mode when the requested provider's
+# API key is missing (graceful echo-style fallback).
+AI_PROVIDER = os.environ.get('AI_PROVIDER', 'gemini').strip().lower()
+AI_BASE_URL = (os.environ.get('AI_BASE_URL') or '').strip()
 AI_API_KEY = (os.environ.get('VENICE_API_KEY') or '').strip()
-# Venice resolves the 'default' trait to its current default chat model.
+GEMINI_API_KEY = (os.environ.get('GEMINI_API_KEY') or '').strip()
 AI_MODEL = os.environ.get('AI_MODEL') or 'default'
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or 'gemini-1.5-flash'
 
 # Back-compat aliases (legacy names still referenced elsewhere/health payload).
 OPENAI_API_KEY = AI_API_KEY
@@ -87,10 +86,16 @@ WSGI_APPLICATION = 'Winstone_ai.wsgi.application'
 
 
 # Database
+# Uses environment variables: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_NAME, POSTGRES_USER, POSTGRES_PASSWORD
+# Falls back to local values for local development if not set.
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_NAME', 'Winstone.ai'),
+        'USER': os.environ.get('POSTGRES_USER', 'Winstone.ai'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'Winstone-76'),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': int(os.environ.get('POSTGRES_PORT', '5432')),
     }
 }
 
