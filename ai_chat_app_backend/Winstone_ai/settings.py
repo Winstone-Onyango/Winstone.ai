@@ -15,6 +15,15 @@ except Exception:  # never crash on missing dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load .env file via django-environ (optional, if installed)
+try:
+    import environ
+    env = environ.Env(DEBUG=(bool, False))
+    environ.Env.read_env(env_file=os.path.join(BASE_DIR, '.env'))
+except ImportError:
+    env = None
+    print("Warning: django-environ not installed. Install it: pip install django-environ")
+
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = os.environ.get(
@@ -86,18 +95,25 @@ WSGI_APPLICATION = 'Winstone_ai.wsgi.application'
 
 
 # Database
-# Uses environment variables: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_NAME, POSTGRES_USER, POSTGRES_PASSWORD
-# Falls back to local values for local development if not set.
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_NAME', 'Winstone.ai'),
-        'USER': os.environ.get('POSTGRES_USER', 'Winstone.ai'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'Winstone-76'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
-        'PORT': int(os.environ.get('POSTGRES_PORT', '5432')),
+# Uses Supabase PostgreSQL connection via DATABASE_URL environment variable
+# Format: postgresql://user:password@host:5432/database?sslmode=require
+if 'DATABASE_URL' in os.environ:
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))
     }
-}
+else:
+    # Fallback to individual settings (Supabase IPv4 Connection Pooler)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_NAME', 'postgres'),
+            'USER': os.environ.get('POSTGRES_USER', 'postgres.jjvzrlqdhmxohrbhoqtn'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'winstoneonyango76'),
+            'HOST': os.environ.get('POSTGRES_HOST', 'aws-1-eu-west-3.pooler.supabase.com'),
+            'PORT': int(os.environ.get('POSTGRES_PORT', '5432')),
+        }
+    }
 
 
 # Password validation
