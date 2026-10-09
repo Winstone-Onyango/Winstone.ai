@@ -99,7 +99,7 @@
 
 <div align="center">
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 </div>
 
@@ -149,7 +149,7 @@
 
 <div align="center">
 
-## 🏗️ Architecture
+## Architecture
 
 </div>
 
