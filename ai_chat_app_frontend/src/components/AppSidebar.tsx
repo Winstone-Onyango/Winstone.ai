@@ -76,8 +76,8 @@ export function AppSidebar() {
               {({ isActive }) => (
                 <SidebarMenuButton
                   className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition",
-                    isActive ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"
+                    "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5",
+                    isActive ? "bg-muted font-medium" : ""
                   )}
                 >
                   <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -90,7 +90,7 @@ export function AppSidebar() {
               onClick={() => {
                 if (confirm("Delete this chat?")) del.mutate(chat.id);
               }}
-              className="mr-1 hidden rounded p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive group-hover/item:block"
+              className="mr-1 hidden rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground group-hover/item:block"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -102,8 +102,8 @@ export function AppSidebar() {
 
   const group = (label: string, chats: IChat[]) =>
     chats.length > 0 && (
-      <SidebarGroup className="mt-3 px-0">
-        <SidebarGroupLabel className="px-4 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
+      <SidebarGroup className="mt-2 px-0">
+        <SidebarGroupLabel className="px-3 text-xs text-muted-foreground">
           {label}
         </SidebarGroupLabel>
         <SidebarGroupContent>{renderList(chats)}</SidebarGroupContent>
@@ -111,13 +111,12 @@ export function AppSidebar() {
     );
 
   return (
-    <Sidebar className="border-r bg-sidebar text-sidebar-foreground">
+    <Sidebar className="border-r">
       <SidebarContent className="flex flex-col">
-        {/* New chat + search */}
-        <div className="space-y-2.5 px-3 pt-3">
+        <div className="space-y-2 px-3 pt-3">
           <Button
             asChild
-            className="bg-brand-gradient w-full justify-start gap-2 text-white shadow-md transition hover:brightness-110"
+            className="w-full justify-start gap-2"
           >
             <Link to="/chats/new">
               <MessageSquarePlus className="h-4 w-4" /> New Chat
@@ -128,16 +127,16 @@ export function AppSidebar() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search chats…"
+              placeholder="Search chats"
               aria-label="Search chats"
-              className="h-9 bg-muted/50 pl-8 pr-8 text-sm"
+              className="h-9 pl-8 pr-8 text-sm"
             />
             {search && (
               <button
                 type="button"
                 aria-label="Clear search"
                 onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -145,34 +144,24 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* History */}
         <div className="mt-1 min-h-0 flex-1 overflow-y-auto">
           {group("Today", recentChats)}
           {group("Yesterday", yesterdaysChats)}
           {group("Last 7 Days", sevenDaysChats)}
 
           {totalChats === 0 && (
-            <div className="mt-10 flex flex-col items-center px-6 text-center text-muted-foreground">
-              <MessageSquare className="mb-3 h-8 w-8 opacity-40" />
-              <p className="text-sm">{q ? "No chats match your search." : "No conversations yet."}</p>
+            <div className="mt-8 px-4 text-center text-sm text-muted-foreground">
+              <p>{q ? "No chats match your search." : "No conversations yet."}</p>
               {!q && <p className="mt-1 text-xs">Start a new chat and it will show up here.</p>}
             </div>
           )}
         </div>
 
-        {/* AI status */}
         <div className="border-t p-3">
-          <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
-            <span
-              className={cn(
-                "h-2 w-2 shrink-0 rounded-full",
-                health?.ai_configured ? "animate-pulse bg-emerald-500" : "bg-amber-500"
-              )}
-            />
-            <span className="truncate text-xs font-medium">
+          <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+            <span className="truncate text-xs">
               {health?.ai_configured ? health.model || "AI ready" : "Demo mode"}
             </span>
-            <span className="bg-brand-gradient ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-black leading-none text-white">W</span>
           </div>
         </div>
       </SidebarContent>

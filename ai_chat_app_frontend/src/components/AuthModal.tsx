@@ -47,19 +47,19 @@ export default function AuthModal({ mode, onClose, onSwitch }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
     >
       <div
-        className="animate-pop-in w-full max-w-md rounded-2xl border bg-background p-6 shadow-2xl"
+        className="w-full max-w-md rounded-md border bg-background p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
           <div>
-            <div className="bg-brand-gradient mb-4 flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-md">
-              <span className="text-lg font-black leading-none">W</span>
+            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded border border-border bg-foreground text-background">
+              <span className="text-base font-bold leading-none">W</span>
             </div>
-            <h2 className="text-2xl font-bold tracking-tight">
+            <h2 className="text-xl font-semibold">
               {isSignup ? "Create your account" : "Welcome back"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -73,7 +73,7 @@ export default function AuthModal({ mode, onClose, onSwitch }: Props) {
           </Button>
         </div>
 
-        <form onSubmit={submit} className="mt-6 space-y-4">
+        <form onSubmit={submit} className="mt-5 space-y-3">
           {isSignup && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Username</label>
@@ -120,7 +120,7 @@ export default function AuthModal({ mode, onClose, onSwitch }: Props) {
           </div>
 
           {error && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
               {error}
             </div>
           )}
@@ -150,7 +150,7 @@ export default function AuthModal({ mode, onClose, onSwitch }: Props) {
             <>
               Already have an account?{" "}
               <button
-                className="font-semibold text-primary hover:underline"
+                className="font-medium underline"
                 onClick={() => onSwitch("signin")}
               >
                 Sign in
@@ -160,7 +160,7 @@ export default function AuthModal({ mode, onClose, onSwitch }: Props) {
             <>
               New to Winstone.ai?{" "}
               <button
-                className="font-semibold text-primary hover:underline"
+                className="font-medium underline"
                 onClick={() => onSwitch("signup")}
               >
                 Create account

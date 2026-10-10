@@ -257,63 +257,52 @@ export default function HomePage() {
       <div ref={scrollRef} onScroll={handleScroll} className="relative flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
           {isEmpty ? (
-            /* ============ Hero / empty state ============ */
-            <div className="relative flex min-h-[calc(100vh-14rem)] flex-col items-center justify-center overflow-hidden text-center">
-              {/* soft brand aurora behind the hero */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 -z-10 opacity-75"
-                style={{
-                  background:
-                    "radial-gradient(58% 44% at 50% 26%, color-mix(in oklch, var(--brand-1) 24%, transparent), transparent 72%), radial-gradient(44% 34% at 78% 66%, color-mix(in oklch, var(--brand-2) 16%, transparent), transparent 70%), radial-gradient(40% 30% at 22% 72%, color-mix(in oklch, var(--brand-1) 12%, transparent), transparent 70%)",
-                }}
-              />
-              <div className="hero-orb brand-ring flex h-16 w-16 items-center justify-center rounded-[1.4rem] shadow-2xl md:h-20 md:w-20 md:rounded-3xl"><span className="text-3xl font-black leading-none text-white drop-shadow md:text-4xl">W</span></div>
-              <h1 className="mt-6 text-3xl font-bold tracking-tight md:text-4xl">
+            /* Simple empty state */
+            <div className="flex min-h-[calc(100vh-14rem)] flex-col items-center justify-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-md bg-foreground"><span className="text-xl font-bold leading-none text-background">W</span></div>
+              <h1 className="mt-4 text-2xl font-semibold">
                 {greeting}
-                {user ? <span className="text-brand-gradient">{`, ${user.username}`}</span> : ""}
+                {user ? <span>{`, ${user.username}`}</span> : ""}
               </h1>
-              <p className="mt-3 max-w-md text-muted-foreground">
-                What can I help you with today? Ask anything — ideas, code, writing, and more.
+              <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                What can I help you with today?
               </p>
-              <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary/70">Winstone.ai ? your everyday AI copilot</p>
-              <div className="mt-8 grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
-                {SUGGESTIONS.map((s, i) => (
+              <div className="mt-6 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                {SUGGESTIONS.map((s) => (
                   <button
                     key={s.title}
                     type="button"
                     disabled={streaming}
                     onClick={() => handleSend(s.prompt)}
-                    style={{ animationDelay: `${i * 70}ms` }}
-                    className="animate-fade-up group rounded-2xl border border-border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg disabled:opacity-60"
+                    className="rounded-md border border-border bg-card p-3 text-left disabled:opacity-60"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border">
                         <s.icon className="h-4 w-4" />
                       </span>
-                      <span className="font-semibold">{s.title}</span>
+                      <span className="text-sm font-medium">{s.title}</span>
                     </div>
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{s.prompt}</p>
+                    <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{s.prompt}</p>
                   </button>
                 ))}
               </div>
               {!user && (
-                <div className="animate-fade-up mt-7 flex flex-col items-center gap-3 rounded-2xl border border-border bg-card/70 px-5 py-4 text-center backdrop-blur">
+                <div className="mt-6 flex flex-col items-center gap-3 rounded-md border border-border bg-card px-4 py-3 text-center">
                   <p className="text-sm text-muted-foreground">
-                    Sign in or create a free account to start chatting ? every conversation is saved to your account.
+                    Sign in or create a free account to start chatting — every conversation is saved to your account.
                   </p>
                   <div className="flex flex-wrap justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => setAuthOpen("signup")}
-                      className="bg-brand-gradient rounded-full px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:brightness-110"
+                      className="rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background"
                     >
                       Create account
                     </button>
                     <button
                       type="button"
                       onClick={() => setAuthOpen("signin")}
-                      className="rounded-full border border-border px-4 py-2 text-sm font-semibold transition hover:bg-muted"
+                      className="rounded-md border border-border px-3 py-1.5 text-sm font-medium"
                     >
                       Sign in
                     </button>
@@ -322,27 +311,27 @@ export default function HomePage() {
               )}
             </div>
           ) : (
-            <div className="space-y-5 pb-2">
+            <div className="space-y-4 pb-2">
               {messages.map((m, idx) => {
                 const isLast = idx === messages.length - 1;
 
                 if (m.role === "user") {
                   return (
-                    <div key={m.id} className="group flex animate-fade-up justify-end">
+                    <div key={m.id} className="group flex justify-end">
                       <div className="flex max-w-[85%] items-start gap-2">
                         <button
                           type="button"
                           onClick={() => copyText(m)}
                           aria-label="Copy message"
-                          className="mt-1.5 hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 md:flex"
+                          className="mt-1.5 hidden h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 md:flex"
                         >
                           {copiedId === m.id ? (
-                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                            <Check className="h-3.5 w-3.5" />
                           ) : (
                             <Copy className="h-3.5 w-3.5" />
                           )}
                         </button>
-                        <div className="bg-brand-gradient whitespace-pre-wrap break-words rounded-3xl rounded-br-xl px-4 py-2.5 text-[15px] leading-7 text-white shadow-md">
+                        <div className="whitespace-pre-wrap break-words rounded-md bg-foreground px-3 py-2 text-[15px] leading-7 text-background">
                           {m.content}
                         </div>
                       </div>
@@ -352,26 +341,26 @@ export default function HomePage() {
 
                 const showTyping = streaming && isLast && !m.content && !m.error;
                 return (
-                  <div key={m.id} className="group flex animate-fade-up items-start">
-                    <div className="bg-brand-gradient mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white shadow">
-                      <span className="text-[13px] font-bold leading-none">W</span>
+                  <div key={m.id} className="group flex items-start">
+                    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border text-xs font-semibold">
+                      <span className="leading-none">W</span>
                     </div>
                     <div className="ml-3 min-w-0 flex-1">
                       {showTyping ? (
-                        <div className="inline-flex w-fit rounded-2xl rounded-bl-xl border border-border bg-muted/60 px-4 py-2.5">
+                        <div className="inline-flex w-fit rounded-md border border-border bg-muted px-3 py-2">
                           <TypingLoader label="Thinking…" />
                         </div>
                       ) : (
                         m.content && (
                           <div
                             className={cn(
-                              "rounded-2xl rounded-bl-xl border px-4 py-3",
-                              m.error ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-card"
+                              "rounded-md border px-3 py-2",
+                              m.error ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"
                             )}
                           >
                             <MarkdownMessage content={m.content} />
                             {streaming && isLast && !m.error && (
-                              <span className="ml-0.5 inline-block h-4 w-[7px] translate-y-[3px] animate-pulse rounded-sm bg-primary" />
+                              <span className="ml-0.5 inline-block h-4 w-[7px] translate-y-[3px] rounded-sm bg-muted-foreground" />
                             )}
                           </div>
                         )
@@ -379,25 +368,25 @@ export default function HomePage() {
 
                       {/* hover actions */}
                       {m.content && !m.error && !streaming && (
-                        <div className="mt-1.5 flex gap-1 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
+                        <div className="mt-1 flex gap-1 opacity-0 focus-within:opacity-100 group-hover:opacity-100">
                           <button
                             type="button"
                             onClick={() => copyText(m)}
                             aria-label="Copy response"
-                            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                           >
                             {copiedId === m.id ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-500" />
+                              <Check className="h-3.5 w-3.5" />
                             ) : (
                               <Copy className="h-3.5 w-3.5" />
                             )}
-                            {copiedId === m.id ? "Copied!" : "Copy"}
+                            {copiedId === m.id ? "Copied" : "Copy"}
                           </button>
                           {isLast && (
                             <button
                               type="button"
                               onClick={handleRegenerate}
-                              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                             >
                               <RefreshCcw className="h-3.5 w-3.5" />
                               Regenerate
@@ -411,7 +400,7 @@ export default function HomePage() {
                         <button
                           type="button"
                           onClick={handleRegenerate}
-                          className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive/20"
+                          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium"
                         >
                           <RefreshCcw className="h-3.5 w-3.5" />
                           Try again
@@ -426,22 +415,22 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* scroll-to-bottom FAB (anchored to the panel viewport) */}
+        {/* scroll-to-bottom button */}
         {!atBottom && !isEmpty && (
           <button
             type="button"
             onClick={scrollToBottom}
             aria-label="Scroll to bottom"
-            className="animate-pop-in absolute bottom-6 right-5 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-lg transition hover:bg-muted md:right-8"
+            className="absolute bottom-4 right-4 flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background md:right-6"
           >
             <ArrowDown className="h-4 w-4" />
           </button>
         )}
       </div>
-      {/* ---------- Composer ---------- */}
-      <div className="border-t border-border/70 bg-background/85 px-4 pb-4 pt-3 backdrop-blur-xl">
+      {/* Composer */}
+      <div className="border-t border-border bg-background px-4 pb-4 pt-3">
         <div className="mx-auto max-w-3xl">
-          <div className="flex items-end gap-2 rounded-[1.75rem] border border-border bg-card p-2 pl-4 shadow-lg transition focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
+          <div className="flex items-end gap-2 rounded-md border border-border bg-card p-2 pl-3">
             <Textarea
               placeholder={user ? "Message Winstone.ai…" : "Sign in or sign up to send a message…"}
               value={input}
@@ -460,7 +449,7 @@ export default function HomePage() {
                 type="button"
                 onClick={handleStop}
                 aria-label="Stop generating"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive text-white shadow-md transition hover:bg-destructive/90"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border"
               >
                 <Square className="h-3.5 w-3.5 fill-current" />
               </button>
@@ -470,23 +459,14 @@ export default function HomePage() {
                 onClick={() => handleSend()}
                 disabled={!!user && !input.trim()}
                 aria-label="Send message"
-                className="bg-brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md transition hover:brightness-110 disabled:opacity-40 disabled:shadow-none"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-foreground text-background disabled:opacity-40"
               >
                 <ArrowUp className="h-4 w-4" />
               </button>
             )}
           </div>
-          <div className="mt-2 flex items-center justify-between gap-2 px-1.5 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">Enter</kbd>
-              to send
-              <span className="mx-1">·</span>
-              <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">
-                Shift + Enter
-              </kbd>
-              for a new line
-            </span>
-            <span className="hidden sm:inline">Winstone.ai can make mistakes. Verify important information.</span>
+          <div className="mt-2 px-1 text-xs text-muted-foreground">
+            <span>Winstone.ai can make mistakes. Verify important information.</span>
           </div>
         </div>
       </div>
