@@ -22,22 +22,17 @@ function CodeBlock({ language, code, dark }: { language: string; code: string; d
 
   return (
     <div
-      className={cn(
-        "my-3 overflow-hidden rounded-xl border shadow-sm",
-        dark ? "border-white/10 bg-[#0d1117]" : "border-border bg-slate-50"
-      )}
+      className={
+        dark ? "overflow-hidden rounded-md border border-border" : "overflow-hidden rounded-md border border-border"
+      }
     >
       <div
-        className={cn(
-          "flex items-center justify-between px-3 py-1.5",
-          dark ? "border-b border-white/10 bg-white/5" : "border-b border-border bg-slate-100/80"
-        )}
+        className={
+          dark ? "flex items-center justify-between border-b border-border bg-muted px-3 py-1.5" : "flex items-center justify-between border-b border-border bg-muted px-3 py-1.5"
+        }
       >
         <span
-          className={cn(
-            "font-mono text-[11px] font-medium uppercase tracking-wider",
-            dark ? "text-slate-400" : "text-slate-500"
-          )}
+          className="font-mono text-xs text-muted-foreground"
         >
           {language}
         </span>
@@ -45,15 +40,10 @@ function CodeBlock({ language, code, dark }: { language: string; code: string; d
           type="button"
           onClick={copy}
           aria-label="Copy code"
-          className={cn(
-            "flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition",
-            dark
-              ? "text-slate-400 hover:bg-white/10 hover:text-slate-200"
-              : "text-slate-500 hover:bg-slate-200 hover:text-slate-700"
-          )}
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "Copied!" : "Copy"}
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
       <SyntaxHighlighter
@@ -62,11 +52,10 @@ function CodeBlock({ language, code, dark }: { language: string; code: string; d
         PreTag="div"
         customStyle={{
           margin: 0,
-          padding: "0.9rem 1rem",
+          padding: "0.75rem",
           background: "transparent",
           fontSize: "13px",
-          lineHeight: 1.65,
-          overflowX: "auto",
+          lineHeight: 1.6,
         }}
       >
         {code}
@@ -99,7 +88,7 @@ export default function MarkdownMessage({ content, className }: Props) {
             const isBlock = Boolean(match) || raw.includes("\n");
             if (!isBlock) {
               return (
-                <code className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
+                <code className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[0.85em]">
                   {raw}
                 </code>
               );
@@ -107,10 +96,7 @@ export default function MarkdownMessage({ content, className }: Props) {
             if (!match) {
               return (
                 <pre
-                  className={cn(
-                    "my-3 overflow-x-auto rounded-xl border p-4 font-mono text-[13px] leading-1.65",
-                    dark ? "border-white/10 bg-[#0d1117]" : "border-border bg-slate-50"
-                  )}
+                  className="my-3 overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-[13px]"
                 >
                   <code>{raw}</code>
                 </pre>
@@ -119,37 +105,37 @@ export default function MarkdownMessage({ content, className }: Props) {
             return <CodeBlock language={match[1]} code={raw} dark={dark} />;
           },
           p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-          h1: ({ children }) => <h1 className="mt-6 mb-3 text-2xl font-bold tracking-tight first:mt-0">{children}</h1>,
-          h2: ({ children }) => <h2 className="mt-5 mb-2.5 text-xl font-bold tracking-tight first:mt-0">{children}</h2>,
-          h3: ({ children }) => <h3 className="mt-4 mb-2 text-lg font-semibold first:mt-0">{children}</h3>,
-          ul: ({ children }) => <ul className="my-3 list-disc space-y-1.5 pl-6">{children}</ul>,
-          ol: ({ children }) => <ol className="my-3 list-decimal space-y-1.5 pl-6">{children}</ol>,
-          li: ({ children }) => <li className="leading-7 marker:text-primary">{children}</li>,
+          h1: ({ children }) => <h1 className="mt-4 mb-2 text-xl font-semibold first:mt-0">{children}</h1>,
+          h2: ({ children }) => <h2 className="mt-4 mb-2 text-lg font-semibold first:mt-0">{children}</h2>,
+          h3: ({ children }) => <h3 className="mt-3 mb-1 text-base font-semibold first:mt-0">{children}</h3>,
+          ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+          li: ({ children }) => <li className="leading-7">{children}</li>,
           a: ({ href, children }) => (
             <a
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-primary underline underline-offset-4 hover:opacity-80"
+              className="underline underline-offset-4"
             >
               {children}
             </a>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="my-3 rounded-r-xl border-l-4 border-primary/50 bg-muted px-4 py-2 text-muted-foreground italic">
+            <blockquote className="my-2 border-l-2 border-border bg-muted px-3 py-1 text-muted-foreground">
               {children}
             </blockquote>
           ),
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto rounded-xl border border-border">
+            <div className="my-2 overflow-x-auto rounded-md border border-border">
               <table className="w-full border-collapse text-sm">{children}</table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="border-b border-border bg-muted px-3 py-2 text-left font-semibold">{children}</th>
+            <th className="border-b border-border bg-muted px-2 py-1.5 text-left font-medium">{children}</th>
           ),
-          td: ({ children }) => <td className="border-b border-border px-3 py-2 align-top">{children}</td>,
-          hr: () => <hr className="my-5 border-border" />,
+          td: ({ children }) => <td className="border-b border-border px-2 py-1.5 align-top">{children}</td>,
+          hr: () => <hr className="my-4 border-border" />,
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
         }}
       >
