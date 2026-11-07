@@ -56,12 +56,70 @@ api.interceptors.response.use(
   }
 );
 
-function errMsg(err: unknown, fallback: string) {
+/** ── Error sanitisation ───────────────────────────────────────────────
+ * Strips sensitive data out of raw errors so the UI never sees tokens,
+ * API keys, connection strings, or server-internal debugging text. */
+function sanitizeErrorMessage(raw: string, fallback: string): string {
+  let msg = raw.trim();
+
+  // Mask / redact bearer JWT tokens
+  msg = msg.replace(/Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+/g, "Bearer [REDACTED]");
+  msg = msg.replace(/eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+/g, "[TOKEN REDACTED]");
+
+  // Mask / redact API keys & secrets (starts with sk-, or contains AKIA, etc.)
+  msg = msg.replace(/sk-[A-Za-z0-9]{20,}/g, "sk-[REDACTED]");
+  msg = msg.replace(/AIza[0-9A-Za-z\-_]{33}/g, "AIza[REDACTED]");
+  msg = msg.replace(/[A-Za-z0-9\-_]{32,}\.[A-Za-z0-9\-_]{2,}\.[A-Za-z0-9\-_]{2,}/g, "[REDACTED]");
+
+  // Redact database connection strings (postgresql://user:pass@host:port/db)
+  msg = msg.replace(/postgresql:\/\/[^@\s]+:[^@\s]+@/g, "postgresql://***:***@");
+
+  // Detect common internal / infrastructure error patterns and replace with friendly messages
+  const lower = msg.toLowerCase();
+
+  if (lower.includes("connection to server") || lower.includes("unable to connect") || lower.includes("enotfound") || lower.includes("getaddrinfo") || lower.includes("network") || lower.includes("timeout") || lower.includes("fetch failed")) {
+    return "The server is unreachable or timing out. Please check that the backend is running and try again.";
+  }
+
+  if (lower.includes("database") || lower.includes("postgresql") || lower.includes("supabase")) {
+    return "The server cannot reach its database. Please wait a moment and try signing in again.";
+  }
+
+  if (lower.includes("500 internal server error") || lower.includes("502 bad gateway") || lower.includes("503 service unavailable") || lower.includes("504 gateway timeout")) {
+    return "The server hit an unexpected error. Please try again in a moment.";
+  }
+
+  if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid credentials")) {
+    return "Invalid username/email or password.";
+  }
+
+  if (lower.includes("403") || lower.includes("forbidden") || lower.includes("account is disabled")) {
+    return "This account is disabled. Please contact support.";
+  }
+
+  if (lower.includes("404") || lower.includes("not found")) {
+    return "The server could not be found. Please check that the backend is running.";
+  }
+
+  // Remove any leftover semi-internal stack-trace fragments
+  msg = msg.replace(/at [a-zA-Z0-9_.\$<>[\]]+/g, "");
+  msg = msg.replace(/\(http.*\)/g, ""); // strip URLs
+
+  // Never show the raw message if it contains suspicious internal content
+  if (msg.length > 280) {
+    return fallback;
+  }
+
+  return msg || fallback;
+}
+
+/** Extract a user-friendly error message, never leaking keys, tokens, or internals. */
+function errMsg(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as Record<string, unknown> | undefined;
     if (data) {
-      if (typeof data.error === "string") return data.error;
-      if (typeof data.detail === "string") return data.detail;
+      if (typeof data.error === "string") return sanitizeErrorMessage(data.error, fallback);
+      if (typeof data.detail === "string") return sanitizeErrorMessage(data.detail, fallback);
       // DRF serializer errors: { field: [msgs] }
       const parts: string[] = [];
       for (const k of Object.keys(data)) {
@@ -69,11 +127,13 @@ function errMsg(err: unknown, fallback: string) {
         if (Array.isArray(v)) parts.push(`${k}: ${v.join(", ")}`);
         else if (typeof v === "string") parts.push(`${k}: ${v}`);
       }
-      if (parts.length) return parts.join(" | ");
+      if (parts.length) return sanitizeErrorMessage(parts.join(" | "), fallback);
     }
-    return err.message || fallback;
+    return sanitizeErrorMessage(err.message || fallback, fallback);
   }
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    return sanitizeErrorMessage(err.message, fallback);
+  }
   return fallback;
 }
 

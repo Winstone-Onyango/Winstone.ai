@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, LogIn, UserPlus, X } from "lucide-react";
+import { Loader2, LogIn, UserPlus, X, AlertTriangle } from "lucide-react";
 
 interface Props {
   mode: "signin" | "signup";
@@ -120,8 +120,9 @@ export default function AuthModal({ mode, onClose, onSwitch }: Props) {
           </div>
 
           {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-              {error}
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="text-sm">{error}</span>
             </div>
           )}
 
